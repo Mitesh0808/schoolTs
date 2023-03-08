@@ -16,17 +16,19 @@ exports.logout = exports.disableMarketing = exports.authUser = exports.deleteMar
 const http_status_codes_1 = require("http-status-codes");
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const marketingValidator_1 = require("../validation/marketingValidator");
+const redis_1 = require("../utils/redis");
+const marketingKey = "marketing";
 const token_1 = require("../utils/token");
 const validation_1 = require("../validation");
 const checkPassword_1 = require("../utils/checkPassword");
 const model_1 = require("../model/");
 exports.getAllMarketing = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // const cachedMarketing = await client.get(marketingKey);
-        // if (cachedMarketing !== null) {
-        //   res.status(200).send(JSON.parse(cachedMarketing));
-        //   return;
-        // }
+        const cachedMarketing = yield redis_1.client.get(marketingKey);
+        if (cachedMarketing !== null) {
+            res.status(200).send(JSON.parse(cachedMarketing));
+            return;
+        }
         const marketings = yield model_1.Marketing.aggregate([
             {
                 $lookup: {
@@ -47,7 +49,7 @@ exports.getAllMarketing = (0, express_async_handler_1.default)((req, res) => __a
                 },
             },
         ]);
-        // await client.set(marketingKey, JSON.stringify(marketings), "EX", 3600);
+        yield redis_1.client.set(marketingKey, JSON.stringify(marketings), "EX", 3600);
         res.status(http_status_codes_1.StatusCodes.OK).send(marketings);
     }
     catch (error) {
@@ -57,21 +59,24 @@ exports.getAllMarketing = (0, express_async_handler_1.default)((req, res) => __a
     }
 }));
 exports.createMarketing = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     const { error, value } = (0, marketingValidator_1.marketingCreateValidator)(req.body);
     if (error) {
         res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
         return;
     }
     try {
-        // const { school } = await Admin.findOne({ email: req.decoded.email }).select(
-        //   {
-        //     school: 1,
-        //     _id: 0,
-        //   }
-        // );
-        // value.school = school;
+        const admin = (yield model_1.Admin.findOne({ email: (_a = req.decoded) === null || _a === void 0 ? void 0 : _a.email }).select({
+            school: 1,
+            _id: 0,
+        }));
+        if (!admin.school) {
+            res.status(http_status_codes_1.StatusCodes.NOT_FOUND).send("School not found");
+            return;
+        }
+        value.school = admin.school.toString();
         const marketing = yield model_1.Marketing.create(value);
-        // await client.del(marketingKey);
+        yield redis_1.client.del(marketingKey);
         res.status(http_status_codes_1.StatusCodes.CREATED).json(marketing);
     }
     catch (error) {
@@ -98,18 +103,25 @@ exports.getMarketing = (0, express_async_handler_1.default)((req, res) => __awai
     }
 }));
 exports.updateMarketing = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    {
+        const { error, value } = (0, validation_1.idValidator)({ id });
+        if (error) {
+            res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+            return;
+        }
+    }
     const { error, value } = (0, marketingValidator_1.marketingUpdateValidator)(req.body);
     if (error) {
         res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
         return;
     }
     try {
-        const { id } = req.params;
         const updatedMarketing = yield model_1.Marketing.findOneAndUpdate({ _id: id }, value, {
             new: true,
             runValidators: true,
         });
-        // await client.del(marketingKey);
+        yield redis_1.client.del(marketingKey);
         res.status(http_status_codes_1.StatusCodes.OK).send(updatedMarketing);
     }
     catch (error) {
@@ -120,13 +132,18 @@ exports.updateMarketing = (0, express_async_handler_1.default)((req, res) => __a
 }));
 exports.deleteMarketing = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
+    const { error, value } = (0, validation_1.idValidator)({ id });
+    if (error) {
+        res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+        return;
+    }
     try {
         const marketing = yield model_1.Marketing.findByIdAndDelete(id);
         if (!marketing) {
             res.status(http_status_codes_1.StatusCodes.NOT_FOUND).send("Marketing not found");
             return;
         }
-        //   await client.del(marketingKey);
+        yield redis_1.client.del(marketingKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("Marketing deleted successfully");
     }
     catch (error) {
@@ -152,12 +169,12 @@ exports.authUser = (0, express_async_handler_1.default)((req, res) => __awaiter(
         const accessToken = (0, token_1.generateAccessToken)({
             email: marketing.email,
             role: "marketing",
-            id: marketing._id,
+            Id: marketing._id,
         });
         const refreshToken = (0, token_1.generateRefreshToken)({
             email: marketing.email,
             role: "marketing",
-            id: marketing._id,
+            Id: marketing._id,
         });
         (0, token_1.setRefreshTokenCookie)(res, refreshToken);
         (0, token_1.setAccessTokenCookie)(res, accessToken);
@@ -169,12 +186,17 @@ exports.authUser = (0, express_async_handler_1.default)((req, res) => __awaiter(
 }));
 exports.disableMarketing = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
+    const { error, value } = (0, validation_1.idValidator)({ id });
+    if (error) {
+        res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+        return;
+    }
     try {
         const marketing = yield model_1.Marketing.findOneAndUpdate({ _id: id }, { isActive: false }, {
             new: true,
             runValidators: true,
         });
-        //   await client.del(marketingKey);
+        yield redis_1.client.del(marketingKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("marketing is disabled");
     }
     catch (error) {

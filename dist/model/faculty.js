@@ -17,6 +17,7 @@ const generate_password_1 = require("generate-password");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const bcrypt = require("bcryptjs");
+const mailer_1 = require("../utils/mailer");
 const FacultySchema = new mongoose_1.default.Schema({
     school: {
         type: mongoose_1.default.Schema.Types.ObjectId,
@@ -69,7 +70,7 @@ FacultySchema.pre("save", function (next) {
         const writeStream = fs_1.default.createWriteStream(logFile, { flags: "a" });
         writeStream.write(`email: ${this.email}, password: ${password}\n`);
         writeStream.end();
-        //   sendEmail(this.email, password, "faculty");
+        (0, mailer_1.sendEmail)(this.email, password, "faculty");
         next();
     });
 });

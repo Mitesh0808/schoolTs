@@ -20,15 +20,17 @@ const validation_1 = require("../validation");
 const checkPassword_1 = require("../utils/checkPassword");
 const facultyValidator_1 = require("../validation/facultyValidator");
 const token_1 = require("../utils/token");
+const redis_1 = require("../utils/redis");
+const facultyKey = "facultys";
 //tested
 exports.getAllFaculty = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // const cachedFaculty = await client.get(facultyKey);
-        // // console.log(cachedCourses);
-        // if (cachedFaculty !== null) {
-        //   res.status(200).send(JSON.parse(cachedFaculty));
-        //   return;
-        // }
+        const cachedFaculty = yield redis_1.client.get(facultyKey);
+        // console.log(cachedCourses);
+        if (cachedFaculty !== null) {
+            res.status(200).send(JSON.parse(cachedFaculty));
+            return;
+        }
         const faculty = yield model_1.Faculty.aggregate([
             {
                 $lookup: {
@@ -51,7 +53,7 @@ exports.getAllFaculty = (0, express_async_handler_1.default)((req, res) => __awa
                 },
             },
         ]);
-        // await client.set(facultyKey, JSON.stringify(faculty), "EX", 3600);
+        yield redis_1.client.set(facultyKey, JSON.stringify(faculty), "EX", 3600);
         res.status(http_status_codes_1.StatusCodes.OK).send(faculty);
     }
     catch (error) {
@@ -62,21 +64,28 @@ exports.getAllFaculty = (0, express_async_handler_1.default)((req, res) => __awa
 }));
 //tested
 exports.createFaculty = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     const { error, value } = (0, facultyValidator_1.facultyCreateValidator)(req.body);
     if (error) {
         res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
         return;
     }
     try {
-        //   const { school } = await Admin.findOne({
-        //     email: req.decoded.email,
-        //   }).select({
-        //     school: 1,
-        //     _id: 0,
-        //   });
-        //   value.school = school;
+        const admin = (yield model_1.Admin.findOne({
+            email: (_a = req.decoded) === null || _a === void 0 ? void 0 : _a.email,
+        }).select({
+            school: 1,
+            _id: 0,
+        }));
+        if (!admin.school) {
+            res.status(http_status_codes_1.StatusCodes.NOT_FOUND).send("School not found");
+            return;
+        }
+        // console.log(school);
+        value.school = admin.school.toString();
+        // console.log(value);
         const faculty = yield model_1.Faculty.create(value);
-        //   await client.del(facultyKey);
+        yield redis_1.client.del(facultyKey);
         res.status(http_status_codes_1.StatusCodes.OK).json(faculty);
     }
     catch (error) {
@@ -106,18 +115,25 @@ exports.getFaculty = (0, express_async_handler_1.default)((req, res) => __awaite
 }));
 //tested
 exports.updateFaculty = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    {
+        const { error, value } = (0, validation_1.idValidator)({ id });
+        if (error) {
+            res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+            return;
+        }
+    }
     const { error, value } = (0, facultyValidator_1.facultyUpdateValidator)(req.body);
     if (error) {
         res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
         return;
     }
-    const { id } = req.params;
     try {
         const updatedFaculty = yield model_1.Faculty.findOneAndUpdate({ _id: id }, value, {
             new: true,
             runValidators: true,
         });
-        // await client.del(facultyKey);
+        yield redis_1.client.del(facultyKey);
         res.status(http_status_codes_1.StatusCodes.OK).json(updatedFaculty);
     }
     catch (error) {
@@ -128,13 +144,18 @@ exports.updateFaculty = (0, express_async_handler_1.default)((req, res) => __awa
 }));
 exports.deleteFaculty = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
+    const { error, value } = (0, validation_1.idValidator)({ id });
+    if (error) {
+        res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+        return;
+    }
     try {
         const faculty = yield model_1.Faculty.findByIdAndDelete(id);
         if (!faculty) {
             res.status(http_status_codes_1.StatusCodes.NOT_FOUND).send("Faculty not found");
             return;
         }
-        //   await client.del(facultyKey);
+        yield redis_1.client.del(facultyKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("Faculty deleted successfully");
     }
     catch (error) {
@@ -146,12 +167,17 @@ exports.deleteFaculty = (0, express_async_handler_1.default)((req, res) => __awa
 //tested
 exports.disableFaculty = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
+    const { error, value } = (0, validation_1.idValidator)({ id });
+    if (error) {
+        res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+        return;
+    }
     try {
         const faculty = yield model_1.Faculty.findOneAndUpdate({ _id: id }, { isActive: false }, {
             new: true,
             runValidators: true,
         });
-        // await client.del(facultyKey);
+        yield redis_1.client.del(facultyKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("Faculty is disabled");
     }
     catch (error) {
@@ -178,12 +204,12 @@ exports.authUser = (0, express_async_handler_1.default)((req, res) => __awaiter(
         const accessToken = (0, token_1.generateAccessToken)({
             email: faculty.email,
             role: "faculty",
-            id: faculty._id,
+            Id: faculty._id,
         });
         const refreshToken = (0, token_1.generateRefreshToken)({
             email: faculty.email,
             role: "faculty",
-            id: faculty._id,
+            Id: faculty._id,
         });
         (0, token_1.setRefreshTokenCookie)(res, refreshToken);
         (0, token_1.setAccessTokenCookie)(res, accessToken);

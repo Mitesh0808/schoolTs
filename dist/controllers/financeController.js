@@ -20,14 +20,16 @@ const token_1 = require("../utils/token");
 const validation_1 = require("../validation");
 const checkPassword_1 = require("../utils/checkPassword");
 const model_1 = require("../model/");
+const redis_1 = require("../utils/redis");
+const financeKey = "finance";
 exports.getAllFinance = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // const cachedFinance = await client.get(financeKey);
-        // // console.log(cachedCourses);
-        // if (cachedFinance !== null) {
-        //   res.status(200).send(JSON.parse(cachedFinance));
-        //   return;
-        // }
+        const cachedFinance = yield redis_1.client.get(financeKey);
+        // console.log(cachedCourses);
+        if (cachedFinance !== null) {
+            res.status(200).send(JSON.parse(cachedFinance));
+            return;
+        }
         const finances = yield model_1.Finance.aggregate([
             {
                 $lookup: {
@@ -48,7 +50,7 @@ exports.getAllFinance = (0, express_async_handler_1.default)((req, res) => __awa
                 },
             },
         ]);
-        // await client.set(financeKey, JSON.stringify(finances), "EX", 3600);
+        yield redis_1.client.set(financeKey, JSON.stringify(finances), "EX", 3600);
         res.status(http_status_codes_1.StatusCodes.OK).send(finances);
     }
     catch (error) {
@@ -58,21 +60,24 @@ exports.getAllFinance = (0, express_async_handler_1.default)((req, res) => __awa
     }
 }));
 exports.createFinance = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     const { error, value } = (0, financeValidator_1.financeCreateValidator)(req.body);
     if (error) {
         res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
         return;
     }
     try {
-        //   const { school } = await Admin.findOne({ email: req.decoded.email }).select(
-        //     {
-        //       school: 1,
-        //       _id: 0,
-        //     }
-        //   );
-        //   value.school = school;
+        const admin = (yield model_1.Admin.findOne({ email: (_a = req.decoded) === null || _a === void 0 ? void 0 : _a.email }).select({
+            school: 1,
+            _id: 0,
+        }));
+        if (!admin.school) {
+            res.status(http_status_codes_1.StatusCodes.NOT_FOUND).send("School not found");
+            return;
+        }
+        value.school = admin.school.toString();
         const finance = yield model_1.Finance.create(value);
-        //   await client.del(financeKey);
+        yield redis_1.client.del(financeKey);
         res.status(http_status_codes_1.StatusCodes.CREATED).json(finance);
     }
     catch (error) {
@@ -99,18 +104,25 @@ exports.getFinance = (0, express_async_handler_1.default)((req, res) => __awaite
     }
 }));
 exports.updateFinance = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    {
+        const { error, value } = (0, validation_1.idValidator)({ id });
+        if (error) {
+            res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+            return;
+        }
+    }
     const { error, value } = (0, financeValidator_1.financeUpdateValidator)(req.body);
     if (error) {
         res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
         return;
     }
-    const { id } = req.params;
     try {
         const updatedFinance = yield model_1.Finance.findOneAndUpdate({ _id: id }, value, {
             new: true,
             runValidators: true,
         });
-        //   await client.del(financeKey);
+        yield redis_1.client.del(financeKey);
         res.status(http_status_codes_1.StatusCodes.OK).send(updatedFinance);
     }
     catch (error) {
@@ -121,13 +133,18 @@ exports.updateFinance = (0, express_async_handler_1.default)((req, res) => __awa
 }));
 exports.deleteFinance = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
+    const { error, value } = (0, validation_1.idValidator)({ id });
+    if (error) {
+        res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+        return;
+    }
     try {
         const finance = yield model_1.Finance.findByIdAndDelete(id);
         if (!finance) {
             res.status(http_status_codes_1.StatusCodes.NOT_FOUND).send("Finnace not found");
             return;
         }
-        //   await client.del(financeKey);
+        yield redis_1.client.del(financeKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("Finnace deleted successfully");
     }
     catch (error) {
@@ -153,12 +170,12 @@ exports.authUser = (0, express_async_handler_1.default)((req, res) => __awaiter(
         const accessToken = (0, token_1.generateAccessToken)({
             email: finance.email,
             role: "finance",
-            id: finance._id,
+            Id: finance._id,
         });
         const refreshToken = (0, token_1.generateRefreshToken)({
             email: finance.email,
             role: "finance",
-            id: finance._id,
+            Id: finance._id,
         });
         (0, token_1.setRefreshTokenCookie)(res, refreshToken);
         (0, token_1.setAccessTokenCookie)(res, accessToken);
@@ -170,12 +187,17 @@ exports.authUser = (0, express_async_handler_1.default)((req, res) => __awaiter(
 }));
 exports.disableFinance = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
+    const { error, value } = (0, validation_1.idValidator)({ id });
+    if (error) {
+        res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+        return;
+    }
     try {
         const faculty = yield model_1.Finance.findOneAndUpdate({ _id: id }, { isActive: false }, {
             new: true,
             runValidators: true,
         });
-        //   await client.del(financeKey);
+        yield redis_1.client.del(financeKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("Faculty is disabled");
     }
     catch (error) {

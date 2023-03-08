@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.loginValidator = exports.idValidator = void 0;
+exports.emailValidator = exports.loginValidator = exports.idValidator = void 0;
 const Joi = __importStar(require("joi"));
 let idVali = Joi.object({
     id: Joi.string()
@@ -38,3 +38,8 @@ let loginVali = Joi.object({
 });
 const loginValidator = (payload) => loginVali.validate(payload, { abortEarly: false });
 exports.loginValidator = loginValidator;
+let emailVali = Joi.object({
+    email: Joi.string().email().required().messages({}),
+});
+const emailValidator = (payload) => emailVali.validate(payload, { abortEarly: false });
+exports.emailValidator = emailValidator;

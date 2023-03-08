@@ -18,19 +18,14 @@ const express_async_handler_1 = __importDefault(require("express-async-handler")
 const model_1 = require("../model/");
 const inquiryValidator_1 = require("../validation/inquiryValidator");
 const validation_1 = require("../validation");
-// getAllInquiry,
-//   createInquiry,
-//   getInquiry,
-//   updateInquiry,
-//   deleteInquiry,
-//   disableInquiry,
+const redis_1 = require("../utils/redis");
+const inquiryKey = "inquiry";
 exports.getAllInquiry = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    // const cachedInquiry = await client.get(inquiryKey);
-    // console.log(cachedCourses);
-    //   if (cachedInquiry !== null) {
-    //     res.status(200).send(JSON.parse(cachedInquiry));
-    //     return;
-    //   }
+    const cachedInquiry = yield redis_1.client.get(inquiryKey);
+    if (cachedInquiry !== null) {
+        res.status(200).send(JSON.parse(cachedInquiry));
+        return;
+    }
     try {
         const inquirys = yield model_1.Inquiry.aggregate([
             {
@@ -55,7 +50,7 @@ exports.getAllInquiry = (0, express_async_handler_1.default)((req, res) => __awa
                 },
             },
         ]);
-        // await client.set(inquiryKey, JSON.stringify(inquirys), "EX", 3600);
+        yield redis_1.client.set(inquiryKey, JSON.stringify(inquirys), "EX", 3600);
         res.status(http_status_codes_1.StatusCodes.OK).send(inquirys);
     }
     catch (error) {
@@ -72,7 +67,7 @@ exports.createInquiry = (0, express_async_handler_1.default)((req, res) => __awa
     else {
         try {
             const inquiry = yield model_1.Inquiry.create(value);
-            //   await client.del(inquiryKey);
+            yield redis_1.client.del(inquiryKey);
             res.status(http_status_codes_1.StatusCodes.CREATED).json(inquiry);
         }
         catch (error) {
@@ -100,17 +95,24 @@ exports.getInquiry = (0, express_async_handler_1.default)((req, res) => __awaite
     }
 }));
 exports.updateInquiry = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    {
+        const { error, value } = (0, validation_1.idValidator)({ id });
+        if (error) {
+            res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+            return;
+        }
+    }
     const { error, value } = (0, inquiryValidator_1.inquiryUpdateValidator)(req.body);
     if (error) {
         res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
     }
-    const { id } = req.params;
     try {
         const updatedInquiry = yield model_1.Inquiry.findOneAndUpdate({ _id: id }, value, {
             new: true,
             runValidators: true,
         });
-        //   await client.del(inquiryKey);
+        yield redis_1.client.del(inquiryKey);
         res.status(http_status_codes_1.StatusCodes.OK).send(updatedInquiry);
     }
     catch (error) {
@@ -132,7 +134,7 @@ exports.deleteInquiry = (0, express_async_handler_1.default)((req, res) => __awa
             res.status(http_status_codes_1.StatusCodes.NOT_FOUND).send("Inquiry not found");
             return;
         }
-        //   await client.del(inquiryKey);
+        yield redis_1.client.del(inquiryKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("Inquiry deleted successfully");
     }
     catch (error) {
@@ -143,12 +145,17 @@ exports.deleteInquiry = (0, express_async_handler_1.default)((req, res) => __awa
 }));
 exports.disableInquiry = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
+    const { error, value } = (0, validation_1.idValidator)({ id });
+    if (error) {
+        res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+        return;
+    }
     try {
         const faculty = yield model_1.Inquiry.findOneAndUpdate({ _id: id }, { isActive: false }, {
             new: true,
             runValidators: true,
         });
-        // await client.del(inquiryKey);
+        yield redis_1.client.del(inquiryKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("Faculty is disabled");
     }
     catch (error) {

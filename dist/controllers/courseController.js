@@ -16,17 +16,17 @@ exports.disableCourse = exports.deleteCourse = exports.updateCourse = exports.ge
 const http_status_codes_1 = require("http-status-codes");
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const model_1 = require("../model/");
-// import client from "../config/redis";
+const redis_1 = require("../utils/redis");
 const validation_1 = require("../validation");
 const courseValidator_1 = require("../validation/courseValidator");
 const coursesKey = "cources";
 exports.getAllCourses = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // const cachedCourses = await client.get(coursesKey);
-        // if (cachedCourses !== null) {
-        //   res.status(200).send(JSON.parse(cachedCourses));
-        //   return;
-        // }
+        const cachedCourses = yield redis_1.client.get(coursesKey);
+        if (cachedCourses !== null) {
+            res.status(200).send(JSON.parse(cachedCourses));
+            return;
+        }
         const cources = yield model_1.Course.aggregate([
             {
                 $lookup: {
@@ -49,8 +49,8 @@ exports.getAllCourses = (0, express_async_handler_1.default)((req, res) => __awa
                 },
             },
         ]);
-        // await client.set(coursesKey, JSON.stringify(cources), "EX", 3600);
-        // console.log("checkpoint");
+        yield redis_1.client.set(coursesKey, JSON.stringify(cources), "EX", 3600);
+        console.log("checkpoint");
         res.status(200).send(cources);
     }
     catch (error) {
@@ -67,6 +67,7 @@ exports.createCourse = (0, express_async_handler_1.default)((req, res) => __awai
     }
     try {
         const course = yield model_1.Course.create(value);
+        yield redis_1.client.del(coursesKey);
         res.status(http_status_codes_1.StatusCodes.CREATED).json(course);
     }
     catch (error) {
@@ -94,6 +95,13 @@ exports.getCourse = (0, express_async_handler_1.default)((req, res) => __awaiter
 }));
 exports.updateCourse = (0, express_async_handler_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { id } = req.params;
+    {
+        const { error, value } = (0, validation_1.idValidator)({ id });
+        if (error) {
+            res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
+            return;
+        }
+    }
     const { error, value } = (0, courseValidator_1.validateCourseUpdate)(req.body);
     if (error) {
         res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).send(error);
@@ -104,7 +112,7 @@ exports.updateCourse = (0, express_async_handler_1.default)((req, res) => __awai
             new: true,
             runValidators: true,
         });
-        // await client.del(coursesKey);
+        yield redis_1.client.del(coursesKey);
         res.status(http_status_codes_1.StatusCodes.OK).send(updatedCourse);
     }
     catch (error) {
@@ -126,7 +134,7 @@ exports.deleteCourse = (0, express_async_handler_1.default)((req, res) => __awai
             res.status(http_status_codes_1.StatusCodes.NOT_FOUND).send("course not found");
             return;
         }
-        // await client.del(coursesKey);
+        yield redis_1.client.del(coursesKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("course deleted successfully");
     }
     catch (error) {
@@ -147,7 +155,7 @@ exports.disableCourse = (0, express_async_handler_1.default)((req, res) => __awa
             new: true,
             runValidators: true,
         });
-        // await client.del(coursesKey);
+        yield redis_1.client.del(coursesKey);
         res.status(http_status_codes_1.StatusCodes.OK).send("course is disabled");
     }
     catch (error) {
