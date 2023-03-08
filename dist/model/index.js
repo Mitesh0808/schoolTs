@@ -1,0 +1,20 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Seminar = exports.School = exports.Marketing = exports.Inquiry = exports.Finance = exports.Faculty = exports.Course = void 0;
+const course_1 = __importDefault(require("./course"));
+exports.Course = course_1.default;
+const faculty_1 = __importDefault(require("./faculty"));
+exports.Faculty = faculty_1.default;
+const finance_1 = __importDefault(require("./finance"));
+exports.Finance = finance_1.default;
+const inquiry_1 = __importDefault(require("./inquiry"));
+exports.Inquiry = inquiry_1.default;
+const marketing_1 = __importDefault(require("./marketing"));
+exports.Marketing = marketing_1.default;
+const school_1 = __importDefault(require("./school"));
+exports.School = school_1.default;
+const seminar_1 = __importDefault(require("./seminar"));
+exports.Seminar = seminar_1.default;
